@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absensi Wajah - SMAN 1 Puding Besar</title>
+    <!-- Tailwind CSS untuk styling cepat dan rapi -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Face-API.js library -->
+    <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="max-w-xl w-full bg-white rounded-xl shadow-lg p-6 text-center">
+        <h1 class="text-2xl font-bold text-blue-800 mb-1">SMAN 1 PUDING BESAR</h1>
+        <p class="text-gray-600 mb-4">Sistem Absensi Digital Berbasis Wajah</p>
+
+        <!-- Container Kamera -->
+        <div class="relative w-full aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center mb-4">
+            <video id="video" autoplay muted playsinline class="absolute inset-0 w-full h-full object-cover"></video>
+            <canvas id="overlay" class="absolute inset-0 w-full h-full"></canvas>
+            <div id="loading" class="text-white z-10 animate-pulse">Memuat Model AI & Kamera...</div>
+        </div>
+
+        <!-- Status / Notifikasi -->
+        <div id="status-box" class="p-3 rounded-lg bg-blue-50 text-blue-700 font-medium text-sm">
+            Menunggu deteksi wajah...
+        </div>
+    </div>
+
+    <!-- Script JavaScript Terintegrasi -->
+    <script>
+        const video = document.getElementById('video');
+        const loadingText = document.getElementById('loading');
+        const statusBox = document.getElementById('status-box');
+
+        // Ganti URL di bawah ini dengan URL Web App Google Apps Script Anda
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx34vSD0kBH57EEeuGZVLeOG_gWPjg7LrA4u9Mq5kJfa84XA4l7-vwX3L534M65oSpQ/exec';
+
+        async function loadModels() {
+            loadingText.innerText = "Memuat AI Models...";
+            const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model/';
+            
+            try {
+                await Promise.all([
+                    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceLandmarkNet.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+                ]);
+                
+                loadingText.style.display = 'none';
+                startVideo();
+            } catch (error) {
+                console.error("Gagal memuat model AI:", error);
+                loadingText.innerText = "Gagal memuat model AI. Coba refresh halaman.";
+            }
+        }
+
+        function startVideo() {
+            navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false })
+                .then((stream) => {
+                    video.srcObject = stream;
+                })
+                .catch((err) => {
+                    console.error("Gagal membuka kamera: ", err);
+                    statusBox.innerText = "Gagal mengakses kamera perangkat!";
+                    statusBox.className = "p-3 rounded-lg bg-red-50 text-red-700 font-medium text-sm";
+                });
+        }
+
+        // Fungsi mengirim data ke Google Sheets
+        async function catatKehadiran(nis, nama, kelas) {
+            if (!GOOGLE_SCRIPT_URL.includes('http')) {
+                console.warn("URL Google Script belum diatur dengan benar.");
+                return;
+            }
+
+            try {
+                await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nis, nama, kelas, status: 'Hadir' })
+                });
+                
+                statusBox.innerText = `Berhasil Absen: ${nama} (${kelas}) 🎉`;
+                statusBox.className = "p-3 rounded-lg bg-green-50 text-green-700 font-medium text-sm";
+            } catch (error) {
+                console.error("Gagal mengirim data:", error);
+            }
+        }
+
+        video.addEventListener('play', () => {
+            const canvas = document.getElementById('overlay');
+            const displaySize = { width: video.videoWidth, height: video.videoHeight };
+            faceapi.matchDimensions(canvas, displaySize);
+
+            // Variabel pencegah agar absen tidak terkirim terus-menerus dalam waktu berdekatan
+            let isSending = false;
+
+            setInterval(async () => {
+                const detections = await faceapi.detectSingleFace(video).withFaceLandmarks().withFaceDescriptor();
+                
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                if (detections) {
+                    if (!isSending) {
+                        statusBox.innerText = "Wajah terdeteksi, mencatat kehadiran...";
+                        statusBox.className = "p-3 rounded-lg bg-yellow-50 text-yellow-700 font-medium text-sm";
+                        
+                        isSending = true;
+                        
+                        // Simulasi data siswa (Nanti bisa dihubungkan dengan database wajah asli)
+                        await catatKehadiran("1001", "Contoh Siswa", "XII IPA 1");
+
+                        // Jeda 10 detik sebelum siswa yang sama bisa absen lagi
+                        setTimeout(() => { isSending = false; }, 10000);
+                    }
+                } else {
+                    statusBox.innerText = "Arahkan wajah ke kamera...";
+                    statusBox.className = "p-3 rounded-lg bg-blue-50 text-blue-700 font-medium text-sm";
+                }
+            }, 1500);
+        });
+
+        // Jalankan pemuatan model saat halaman dibuka
+        loadModels();
+    </script>
+</body>
+</html>
