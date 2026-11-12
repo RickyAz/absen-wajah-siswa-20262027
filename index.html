@@ -5,14 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Absensi Wajah - SMAN 1 Puding Besar</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Hapus 'defer' agar library dimuat tuntas sebelum script dijalankan -->
     <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
 
     <div class="max-w-xl w-full bg-white rounded-xl shadow-lg p-6 text-center">
-        <h1 class="text-2xl font-bold text-blue-800 mb-1">SMAN 1 PUDING BESAR</h1>
-        <p class="text-gray-600 mb-4">Sistem Absensi Digital Berbasis Wajah</p>
+        <!-- Logo / Identitas Sekolah (Inisial Elegan) -->
+        <div class="flex flex-col items-center mb-4">
+            <div class="w-16 h-16 bg-blue-800 text-white rounded-full flex items-center justify-center font-bold text-lg shadow-md mb-2">
+                SMAN 1
+            </div>
+            <h1 class="text-2xl font-bold text-blue-800 mb-1">SMAN 1 PUDING BESAR</h1>
+            <p class="text-gray-600 text-sm">Sistem Absensi Digital Berbasis Wajah</p>
+        </div>
 
         <!-- Container Kamera -->
         <div class="relative w-full aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center mb-4">
@@ -32,12 +37,11 @@
         const loadingText = document.getElementById('loading');
         const statusBox = document.getElementById('status-box');
 
-        // Ganti dengan URL Google Apps Script Anda
+        // Ganti dengan URL Google Apps Script Anda dari Tahap 1
         const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx34vSD0kBH57EEeuGZVLeOG_gWPjg7LrA4u9Mq5kJfa84XA4l7-vwX3L534M65oSpQ/exec';
 
         let modelsLoaded = false;
 
-        // 1. Nyalakan kamera terlebih dahulu secara independen
         function startVideo() {
             navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false })
                 .then((stream) => {
@@ -48,21 +52,18 @@
                 .catch((err) => {
                     console.error("Gagal membuka kamera: ", err);
                     loadingText.innerText = "Kamera tidak dapat diakses.";
-                    statusBox.innerText = "Error Kamera: " + err.message + " (Pastikan izin kamera diaktifkan di browser)";
+                    statusBox.innerText = "Error Kamera: " + err.message;
                     statusBox.className = "p-3 rounded-lg bg-red-50 text-red-700 font-medium text-sm";
                 });
         }
 
-        // 2. Muat model AI menggunakan CDN jsDelivr yang mendukung CORS
         async function loadModels() {
             const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
             
             try {
-                await Promise.all([
-                    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
-                    faceapi.nets.faceLandmarkNet.loadFromUri(MODEL_URL),
-                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
-                ]);
+                await faceapi.loadSsdMobilenetv1Model(MODEL_URL);
+                await faceapi.loadFaceLandmarkModel(MODEL_URL);
+                await faceapi.loadFaceRecognitionModel(MODEL_URL);
                 
                 modelsLoaded = true;
                 loadingText.style.display = 'none';
@@ -105,7 +106,6 @@
             let isSending = false;
 
             setInterval(async () => {
-                // Jangan deteksi sebelum model AI selesai dimuat
                 if (!modelsLoaded) return;
 
                 const detections = await faceapi.detectSingleFace(video).withFaceLandmarks().withFaceDescriptor();
@@ -132,7 +132,6 @@
             }, 1500);
         });
 
-        // Mulai jalankan kamera saat halaman selesai dimuat
         window.addEventListener('DOMContentLoaded', startVideo);
     </script>
 </body>
