@@ -10,7 +10,7 @@
 <body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
 
     <div class="max-w-xl w-full bg-white rounded-xl shadow-lg p-6 text-center">
-        <!-- Logo / Identitas Sekolah (Inisial Elegan) -->
+        <!-- Logo / Identitas Sekolah -->
         <div class="flex flex-col items-center mb-4">
             <div class="w-16 h-16 bg-blue-800 text-white rounded-full flex items-center justify-center font-bold text-lg shadow-md mb-2">
                 SMAN 1
@@ -58,12 +58,13 @@
         }
 
         async function loadModels() {
-            const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
+            // Menggunakan repository weights resmi yang kompatibel
+            const MODEL_URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
             
             try {
-                await faceapi.loadSsdMobilenetv1Model(MODEL_URL);
-                await faceapi.loadFaceLandmarkModel(MODEL_URL);
-                await faceapi.loadFaceRecognitionModel(MODEL_URL);
+                await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
+                await faceapi.nets.faceLandmarkNet.loadFromUri(MODEL_URL);
+                await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
                 
                 modelsLoaded = true;
                 loadingText.style.display = 'none';
@@ -119,6 +120,7 @@
                         statusBox.className = "p-3 rounded-lg bg-yellow-50 text-yellow-700 font-medium text-sm";
                         
                         isSending = true;
+                        // Contoh data siswa uji coba
                         await catatKehadiran("1001", "Contoh Siswa", "XII IPA 1");
 
                         setTimeout(() => { isSending = false; }, 10000);
