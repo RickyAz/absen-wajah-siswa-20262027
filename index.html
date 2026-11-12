@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Absensi Wajah - SMAN 1 Puding Besar</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Menggunakan versi face-api yang stabil dari CDN unpkg -->
-    <script defer src="https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <!-- Hapus 'defer' agar library dimuat tuntas sebelum script dijalankan -->
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
 
@@ -18,7 +18,7 @@
         <div class="relative w-full aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center mb-4">
             <video id="video" autoplay muted playsinline class="absolute inset-0 w-full h-full object-cover"></video>
             <canvas id="overlay" class="absolute inset-0 w-full h-full"></canvas>
-            <div id="loading" class="text-white z-10 animate-pulse font-medium px-4">Memuat Model AI & Menyalakan Kamera...</div>
+            <div id="loading" class="text-white z-10 bg-black/60 px-4 py-2 rounded-lg font-medium text-sm">Menyalakan Kamera...</div>
         </div>
 
         <!-- Status / Notifikasi -->
@@ -35,39 +35,45 @@
         // Ganti dengan URL Google Apps Script Anda
         const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx34vSD0kBH57EEeuGZVLeOG_gWPjg7LrA4u9Mq5kJfa84XA4l7-vwX3L534M65oSpQ/exec';
 
-        async function loadModels() {
-            loadingText.innerText = "Memuat Model AI (Harap tunggu sebentar)...";
-            
-            // Menggunakan weights dari repository publik yang stabil
-            const MODEL_URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
-            
-            try {
-                await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
-                await faceapi.nets.faceLandmarkNet.loadFromUri(MODEL_URL);
-                await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-                
-                loadingText.style.display = 'none';
-                startVideo();
-            } catch (error) {
-                console.error("Gagal memuat model AI:", error);
-                loadingText.innerText = "Gagal memuat model AI. Periksa koneksi internet.";
-                statusBox.innerText = "Error koneksi model AI!";
-                statusBox.className = "p-3 rounded-lg bg-red-50 text-red-700 font-medium text-sm";
-            }
-        }
+        let modelsLoaded = false;
 
+        // 1. Nyalakan kamera terlebih dahulu secara independen
         function startVideo() {
             navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false })
                 .then((stream) => {
                     video.srcObject = stream;
-                    statusBox.innerText = "Kamera aktif. Silakan arahkan wajah ke kamera.";
-                    statusBox.className = "p-3 rounded-lg bg-blue-50 text-blue-700 font-medium text-sm";
+                    loadingText.innerText = "Kamera aktif. Memuat Model AI...";
+                    loadModels();
                 })
                 .catch((err) => {
                     console.error("Gagal membuka kamera: ", err);
-                    statusBox.innerText = "Gagal mengakses kamera! Pastikan izin kamera diizinkan di browser.";
+                    loadingText.innerText = "Kamera tidak dapat diakses.";
+                    statusBox.innerText = "Error Kamera: " + err.message + " (Pastikan izin kamera diaktifkan di browser)";
                     statusBox.className = "p-3 rounded-lg bg-red-50 text-red-700 font-medium text-sm";
                 });
+        }
+
+        // 2. Muat model AI menggunakan CDN jsDelivr yang mendukung CORS
+        async function loadModels() {
+            const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
+            
+            try {
+                await Promise.all([
+                    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceLandmarkNet.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+                ]);
+                
+                modelsLoaded = true;
+                loadingText.style.display = 'none';
+                statusBox.innerText = "Sistem Siap! Arahkan wajah ke kamera.";
+                statusBox.className = "p-3 rounded-lg bg-blue-50 text-blue-700 font-medium text-sm";
+            } catch (error) {
+                console.error("Gagal memuat model AI:", error);
+                loadingText.style.display = 'none';
+                statusBox.innerText = "Detail Error AI: " + error.message;
+                statusBox.className = "p-3 rounded-lg bg-red-50 text-red-700 font-medium text-sm";
+            }
         }
 
         async function catatKehadiran(nis, nama, kelas) {
@@ -93,12 +99,15 @@
 
         video.addEventListener('play', () => {
             const canvas = document.getElementById('overlay');
-            const displaySize = { width: video.videoWidth, height: video.videoHeight };
+            const displaySize = { width: video.videoWidth || 640, height: video.videoHeight || 480 };
             faceapi.matchDimensions(canvas, displaySize);
 
             let isSending = false;
 
             setInterval(async () => {
+                // Jangan deteksi sebelum model AI selesai dimuat
+                if (!modelsLoaded) return;
+
                 const detections = await faceapi.detectSingleFace(video).withFaceLandmarks().withFaceDescriptor();
                 
                 const ctx = canvas.getContext('2d');
@@ -110,8 +119,6 @@
                         statusBox.className = "p-3 rounded-lg bg-yellow-50 text-yellow-700 font-medium text-sm";
                         
                         isSending = true;
-                        
-                        // Simulasi pencatatan absen
                         await catatKehadiran("1001", "Contoh Siswa", "XII IPA 1");
 
                         setTimeout(() => { isSending = false; }, 10000);
@@ -125,8 +132,8 @@
             }, 1500);
         });
 
-        // Jalankan saat halaman dimuat
-        loadModels();
+        // Mulai jalankan kamera saat halaman selesai dimuat
+        window.addEventListener('DOMContentLoaded', startVideo);
     </script>
 </body>
 </html>
